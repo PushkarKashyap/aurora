@@ -1,7 +1,7 @@
 import os
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
 
@@ -63,7 +63,6 @@ def create_database(chunks):
         persist_directory=CHROMA_PATH
     )
     
-    vector_store.persist()
     print(f"✅ ChromaDB saved successfully to {CHROMA_PATH}")
 
 

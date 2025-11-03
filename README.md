@@ -113,7 +113,7 @@ Open either in your browser to chat with your code! 🧠
 ## 📂 Project Structure  
 
 ```
-code-partner-rag-app/
+aurora/
 ├── rag_agent/
 │   ├── data_ingestion.py
 │   ├── app.py
