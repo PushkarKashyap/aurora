@@ -1,75 +1,62 @@
-# 🌌 Aurora  
-**Conversational RAG-based Coding Assistant for Impact Analysis**
+# 🌌 Aurora
+**Conversational Coding Assistant for Impact Analysis using Gemini**
 
 ---
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-black?logo=ollama)](https://ollama.com)
+[![Gemini](https://img.shields.io/badge/Gemini_API-Google-4285F4?logo=google)](https://ai.google.dev/)
 [![Gradio](https://img.shields.io/badge/Frontend-Gradio-orange?logo=gradio)](https://gradio.app)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Build-Passing-success.svg)]()
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
 
-Aurora is a **local conversational RAG assistant** designed to perform **impact analysis** on codebases.  
-It uses **Ollama LLMs** (Gemma 2B + Nomic Embeddings) and **Gradio UI** to let you chat with your code locally — no cloud dependency.
+Aurora is a **conversational assistant** designed to perform **impact analysis** on codebases.
+It uses the **Google Gemini API** (defaulting to the fast `gemini-2.5-flash` model) with its native file search capabilities and a **Gradio UI** to let you chat with your code.
 
 ---
 
-## 🚀 Steps to Run Locally  
+## 🚀 Steps to Run Locally
 
-Follow these steps to get the application running on your PC.
-
----
-
-### 🧩 **Step 1: Install Ollama**  
-Go to [ollama.com](https://ollama.com) and download the application for Windows.  
-
-Run the installer — Ollama will start automatically in the background.
+Follow these steps to get the application running.
 
 ---
 
-### 🤖 **Step 2: Download the Local Models**  
-Open your terminal (Command Prompt or PowerShell).  
+### 🧩 **Step 1: Get a Google API Key**
+1.  **Go to Google AI Studio:** Open your browser and navigate to [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+2.  **Sign In:** Use your Google account to sign in.
+3.  **Create API Key:** Click the **"Create API key"** button. You may be prompted to create a new Google Cloud project; this is a standard step.
+4.  **Copy Your Key:** A window will appear with your new API key. Copy this key to your clipboard.
 
-Run the following commands to pull the models (Gemma 2B for chat, Nomic for embeddings):
+> **⚠️ Important:** Treat your API key like a password. Never share it publicly or commit it to a Git repository.
 
-```bash
-ollama pull gemma:2b
-```
+### 🗂️ **Step 2: Set Up Your Project**
+1.  Clone the repository from GitHub and navigate into the directory:
+    ```bash
+    git clone https://github.com/PushkarKashyap/aurora
+    cd aurora
+    ```
 
-```bash
-ollama pull nomic-embed-text
-```
-
----
-
-### 🗂️ **Step 3: Set Up Your Python Project**  
-Create your main project folder (e.g., `aurora`).  
-Copy all the project files into it.
-
-**Configure your environment:**
-1.  Create a `.env` file by copying the example: `cp .env.example .env`.
-2.  (Optional) Adjust the model names or paths in `.env` if needed.
-3.  (Optional) Modify `config.yaml` to change chunking or retriever settings.
-
-```bash
-# For Windows (Command Prompt)
-copy .env.example .env
-```
- 
-> ⚠️ **Important:** Place the code files you want to analyze into the `my_project_code` folder.
+2.  **Configure your environment:**
+    - Create a `.env` file by copying the example:
+      ```bash
+      # For Windows (Command Prompt)
+      copy .env.example .env
+      # For macOS/Linux
+      # cp .env.example .env
+      ```
+    - Open the new `.env` file and paste your Google API key from Step 1.
 
 ---
 
-### 🧱 **Step 4: Install Python Dependencies**  
-Open your terminal in the project folder (`aurora`).  
+### 🧱 **Step 3: Install Python Dependencies**
+Open your terminal in the project folder (`aurora`).
 
 It’s recommended to use a Python virtual environment:
 
 ```bash
 python -m venv venv
-source venv/Scripts/activate
+venv\Scripts\activate  # On Windows
+# source venv/Scripts/activate  # On macOS/Linux
 ```
 
 Install all required dependencies:
@@ -80,57 +67,42 @@ pip install -r requirements.txt
 
 ---
 
-### 🧮 **Step 5: Ingest Your Code (Create Vector Store)**  
-Ensure Ollama is running in the background, then execute:
-
-```bash
-python data_ingestion.py
-```
-
-This reads your project files, generates embeddings, and stores them in the `vector_store` folder.  
-Run this again only if you **add or modify** files in `my_project_code`.
-
----
-
-### 💻 **Step 6: Run the Gradio App!**  
-Start the web interface with:
+### 💻 **Step 4: Run the Gradio App!**
+Start the web interface.
 
 ```bash
 python app.py
 ```
 
-Your terminal will show:  
-- **Local URL:** `http://127.0.0.1:7860`  
-- **Public URL:** `https://xxxxx.gradio.live`  
+Your terminal will show:
+- **Local URL:** `http://127.0.0.1:7860`
+- **Public URL:** `https://xxxxx.gradio.live`
 
-Open either in your browser to chat with your code! 🧠
-
----
-
-## 🧠 Tech Stack  
-- **Backend:** Python, LangChain, ChromaDB, Ollama  
-- **Frontend:** Gradio  
-- **Embeddings:** Nomic Embed  
-- **LLM:** Gemma 2B  
+Open either in your browser.
 
 ---
 
-## 📂 Project Structure  
+### **Step 5: Ingest and Chat**
+1.  **Ingest Codebase:** In the "Ingest Codebase" tab, upload all relevant code files (`.py`, `.js`, `.ts`, `.md`, etc.). The tool will create a searchable index of your codebase.
+2.  **Chat With Your Codebase:** Once ingestion is complete, switch to the "Chat" tab and start asking questions about your code.
+
+---
+
+## 🧠 Tech Stack
+- **Backend:** Python, Google Gemini API
+- **Frontend:** Gradio
+- **LLM:** Gemini 2.5 Flash (default)
+
+---
+
+## 📂 Project Structure
 
 ```
 aurora/
-├── my_project_code/        # <-- Add your code to analyze here
-│   └── your_source_files.py
-├── rag_agent/
-│   └── retrieval.py
-├── vector_store/           # <-- Generated by data_ingestion.py
-│   └── ...
 ├── .env                    # <-- Local environment configuration (created from example)
 ├── .env.example
 ├── .gitignore
 ├── app.py                  # <-- Main application entrypoint
-├── config.yaml             # <-- Application configuration
-├── data_ingestion.py       # <-- Script to process and store your code
 ├── prompts.yaml            # <-- All LLM prompts
 ├── requirements.txt
 └── README.md
@@ -138,16 +110,21 @@ aurora/
 
 ---
 
-## 📜 License  
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+## 📝 Notes
+*   The file search store name is hardcoded as `"aurora-code-analysis-store"`. If you want to use a different name, you'll need to modify `app.py`.
 
 ---
 
-## ✨ Acknowledgments  
-- [Ollama](https://ollama.com) for local LLM support  
-- [Nomic](https://nomic.ai) for open embeddings  
-- [Gradio](https://gradio.app) for the intuitive web interface  
+## 📜 License
+This project is licensed under the **Apache License 2.0**. See the `LICENSE` file for details.
 
 ---
 
-> 💡 *“Aurora turns your codebase into a conversational partner — analyze, query, and explore your projects with AI.”*
+## ✨ Acknowledgments
+- Google for the Gemini API
+- Gradio for the intuitive web interface
+
+---
+
+> 💡 *“Aurora turns your codebase into a conversational partner — analyze, query, and explore your projects with the power of Gemini.”*
+
