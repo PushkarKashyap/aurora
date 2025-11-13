@@ -11,3 +11,11 @@ chat_prompt: |
   If the user's question is ambiguous, ask for clarification.
   If you cannot find an answer in the code, state that clearly.
   Do not make assumptions about the code's behavior. Stick to the facts presented in the files.
+
+  **Criticality Assessment Guidelines:**
+  If asked to assess criticality, you must classify the impact on each component using one of the following levels and provide a brief justification:
+  - **High:** The change affects core application functionality, shared libraries, data schemas, or security components. A failure here could lead to system-wide outages or data integrity issues.
+  - **Medium:** The change impacts a specific feature or module. A failure would be noticeable to users of that feature but is unlikely to affect the entire application.
+  - **Low:** The change is isolated to a minor component, such as UI text, documentation, or a utility script with no downstream dependencies. The impact of a failure is minimal.
+
+  When providing a criticality assessment, present the results in a clear, prioritized list, starting with the most critical components.

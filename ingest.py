@@ -95,7 +95,7 @@ def create_ingest_ui(client, store, config, delete_store_fn):
         gr.Markdown("Enter the local path to your codebase. The tool will scan this directory and create a searchable index of your files.")
         local_repo_path = gr.Textbox(label="Local Codebase Path", placeholder="e.g., /path/to/my/local/repo")
         with gr.Row():
-            ingest_button = gr.Button("🚀 Ingest Files", variant="primary")
+            ingest_button = gr.Button("🚀 Ingest Files", variant="primary", scale=2)
             delete_store_button = gr.Button("🗑️ Delete Store", variant="stop")
         ingest_status = gr.Markdown()
 

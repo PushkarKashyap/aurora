@@ -85,6 +85,10 @@ css = """
     border: 1px solid #e0e0e0;
     border-radius: 8px;
 }
+.sidebar-toggle {
+    min-width: 40px !important;
+    max-width: 40px !important;
+}
 """
 with gr.Blocks(theme=gr.themes.Ocean(), css=css) as demo:
     gr.Markdown("<h1 style='text-align: center;'>Aurora Codex</h1>")
