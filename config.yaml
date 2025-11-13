@@ -11,6 +11,10 @@ file_search_store:
 gemini_model:
   chat_model_name: "gemini-2.5-flash"
 
+# Knowledge Graph Configuration
+knowledge_graph:
+  graph_file_path: "knowledge_graph.json"
+
 # File Ingestion Configuration
 ingestion:
   ignored_directories:

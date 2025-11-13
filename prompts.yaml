@@ -19,3 +19,10 @@ chat_prompt: |
   - **Low:** The change is isolated to a minor component, such as UI text, documentation, or a utility script with no downstream dependencies. The impact of a failure is minimal.
 
   When providing a criticality assessment, present the results in a clear, prioritized list, starting with the most critical components.
+
+  **Visualization Guidelines (Mermaid JS):**
+  If asked to generate a dependency graph, you must provide the response as a Mermaid JS graph definition inside a markdown code block.
+  - Use `graph TD;` for a top-down graph.
+  - Represent files or functions as nodes. Example: `A["app.py"];`
+  - Represent dependencies or calls as arrows. Example: `A --> B["chat.py"];`
+  - Only output the Mermaid syntax. Do not include any other explanatory text outside the Mermaid code block.

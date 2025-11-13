@@ -2,6 +2,7 @@ data/
 
 # Application-specific generated files
 aurora_history.db
+knowledge_graph.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
