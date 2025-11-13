@@ -149,7 +149,7 @@ def generate_report(conversation_id, db_name):
         return gr_update(value=temp_file.name, visible=True)
 
 
-def generate_visualization(conversation_id, db_name, config):
+def generate_visualization(conversation_id, db_name, config, show_neighbors=False):
     """
     Generates a Mermaid diagram by filtering the knowledge graph based on the current conversation.
     """
@@ -178,23 +178,33 @@ def generate_visualization(conversation_id, db_name, config):
     if not mentioned_nodes:
         return "```mermaid\ngraph TD;\n  A[No specific code entities found in this conversation to visualize.];\n```"
 
-    # 3. Build the subgraph: include mentioned nodes and their direct neighbors
-    subgraph_nodes = set(mentioned_nodes)
-    subgraph_edges = []
-
-    for edge in knowledge_graph['edges']:
-        source, target = edge['source'], edge['target']
-        if source in mentioned_nodes or target in mentioned_nodes:
-            subgraph_nodes.add(source)
-            subgraph_nodes.add(target)
-            subgraph_edges.append(edge)
+    # 3. Build the subgraph based on whether to include neighbors
+    if show_neighbors:
+        # Expanded view: include mentioned nodes and their direct neighbors
+        subgraph_nodes = set(mentioned_nodes)
+        subgraph_edges = []
+        for edge in knowledge_graph['edges']:
+            source, target = edge['source'], edge['target']
+            if source in mentioned_nodes or target in mentioned_nodes:
+                subgraph_nodes.add(source)
+                subgraph_nodes.add(target)
+                subgraph_edges.append(edge)
+    else:
+        # Focused view: include only edges between mentioned nodes.
+        subgraph_nodes = set(mentioned_nodes)
+        subgraph_edges = [
+            edge for edge in knowledge_graph['edges']
+            if edge['source'] in subgraph_nodes and edge['target'] in subgraph_nodes
+        ]
+        # The nodes for the subgraph are only those that are part of the filtered edges.
+        subgraph_nodes = {node for edge in subgraph_edges for node in (edge['source'], edge['target'])}
 
     # 4. Convert the subgraph to Mermaid syntax
     mermaid_string = "graph TD;\n"
     # Create safe IDs for mermaid (replace dots, etc.)
     safe_ids = {node_id: node_id.replace('.', '_').replace('-', '_') for node_id in subgraph_nodes}
 
-    for node_id in subgraph_nodes:
+    for node_id in sorted(list(subgraph_nodes)):
         # Highlight the nodes that were directly mentioned in the chat
         if node_id in mentioned_nodes:
             mermaid_string += f'  {safe_ids[node_id]}["`{node_id}`"];\n'
@@ -344,29 +354,8 @@ def chat_wrapper(message, history, assess_criticality, chat_session, conversatio
     return history, "", new_chat_session, new_conversation_id, conversation_list_update
 
 def start_new_chat():
-    """Clears the chat interface and starts a new session."""
-    return None, None, None, gr.update(value=None), gr.update(visible=False)
-
-def refresh_conversation_list(db_name):
-    """Refreshes the list of conversations in the sidebar."""
-    convos = get_conversations(db_name)
-    # Format for gr.Radio: list of (label, value) tuples
-    formatted_convos = [(f"{title[:40]}..." if len(title) > 40 else title, conv_id) for conv_id, title in convos]
-    return gr.update(choices=formatted_convos)
-
-def delete_conversation(conversation_id, db_name, refresh_conversation_list_fn):
-    """Deletes a conversation and updates the UI."""
-    if not conversation_id:
-        return None, None, None, gr.update(), gr.update(visible=False)
-
-    success = delete_conversation_from_db(db_name, conversation_id)
-
-    if not success:
-        # If deletion fails, don't change the UI, just log the error.
-        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(visible=True)
-
-    # After successful deletion, clear the chat, refresh the list, and hide the button
-    return None, None, None, refresh_conversation_list_fn(), gr.update(visible=False)
+    """Clears the chat interface and starts a new session.""" # Duplicated function, will be removed
+    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
 def create_chat_ui(client, store, prompts, config):
     """Creates the Gradio UI for the Chat tab."""
@@ -391,7 +380,8 @@ def create_chat_ui(client, store, prompts, config):
 
                 generate_report_button = gr.Button("📄 Generate Report", variant="secondary", visible=False)
                 report_file = gr.File(label="Download Report", visible=False, interactive=False)
-                visualize_button = gr.Button("🎨 Visualize Impact", variant="secondary", visible=False) # This button is now connected to the knowledge graph
+                visualize_button = gr.Button("🎨 Visualize Impact", variant="secondary", visible=False)
+                visualize_neighbors_checkbox = gr.Checkbox(label="Show Neighbors", value=False, visible=False, scale=1)
 
             with gr.Column(scale=4) as main_column:
                 chat_session_state = gr.State(None)
@@ -437,31 +427,31 @@ def create_chat_ui(client, store, prompts, config):
         refresh_convos_button.click(fn=refresh_fn, outputs=[conversation_list])
 
         load_conversation_fn = lambda conv_id: load_conversation(conv_id, db_name)
-        conversation_list.input(fn=load_conversation_fn, inputs=[conversation_list], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button])
+        conversation_list.input(fn=load_conversation_fn, inputs=[conversation_list], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox])
 
-        new_chat_button.click(fn=start_new_chat, outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button])
+        new_chat_button.click(fn=start_new_chat, outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox])
 
         delete_conversation_fn = lambda conv_id: delete_conversation(conv_id, db_name, refresh_fn)
-        delete_conversation_button.click(fn=delete_conversation_fn, inputs=[conversation_id_state], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button])
+        delete_conversation_button.click(fn=delete_conversation_fn, inputs=[conversation_id_state], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox])
 
         generate_report_fn = lambda conv_id: generate_report(conv_id, db_name)
         generate_report_button.click(fn=generate_report_fn, inputs=[conversation_id_state], outputs=[report_file])
 
-        visualize_fn = lambda conv_id: generate_visualization(conv_id, db_name, config)
-        visualize_button.click(fn=visualize_fn, inputs=[conversation_id_state], outputs=[visualization_output], show_progress="hidden")
+        visualize_fn = lambda conv_id, show_neighbors: generate_visualization(conv_id, db_name, config, show_neighbors)
+        visualize_button.click(fn=visualize_fn, inputs=[conversation_id_state, visualize_neighbors_checkbox], outputs=[visualization_output], show_progress="hidden")
 
 def load_conversation(conversation_id, db_name):
     """Loads a past conversation from the database into the chat window."""
     from gradio import update as gr_update # Local import to avoid circular dependency issues
     if not conversation_id:
-        return [], None, None, gr_update(value=None), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False)
+        return [], None, None, gr_update(value=None), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False)
 
     print(f"Loading conversation: {conversation_id}")
     history = load_conversation_from_db(db_name, conversation_id)
 
     if not history:
         # Handle case where history is not found or there was a DB error
-        return [], None, None, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False), gr_update(visible=True)
+        return [], None, None, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False), gr_update(visible=True), gr_update(visible=True)
 
     # Reconstruct Gradio's chatbot history format for type="messages"
     chat_history_formatted = []
@@ -471,22 +461,29 @@ def load_conversation(conversation_id, db_name):
     # When loading a conversation, we must start a new backend chat session
     # because the session object cannot be serialized and stored.
     # The context is rebuilt by Gradio's history.
-    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False), gr_update(visible=True)
+    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)
 
 def start_new_chat():
     """Clears the chat interface and starts a new session."""
-    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr_update(visible=False), gr.update(visible=False)
+    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+
+def refresh_conversation_list(db_name):
+    """Refreshes the list of conversations in the sidebar."""
+    convos = get_conversations(db_name)
+    # Format for gr.Radio: list of (label, value) tuples
+    formatted_convos = [(f"{title[:40]}..." if len(title) > 40 else title, conv_id) for conv_id, title in convos]
+    return gr.update(choices=formatted_convos)
 
 def delete_conversation(conversation_id, db_name, refresh_conversation_list_fn):
     """Deletes a conversation and updates the UI."""
     if not conversation_id:
-        return None, None, None, gr.update(), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+        return None, None, None, gr.update(), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
     success = delete_conversation_from_db(db_name, conversation_id)
 
     if not success:
         # If deletion fails, don't change the UI, just log the error.
-        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(visible=True), gr.update(visible=True), gr.update(), gr.update(visible=True)
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(visible=True), gr.update(visible=True), gr.update(), gr.update(visible=True), gr.update(visible=True)
 
     # After successful deletion, clear the chat, refresh the list, and hide the button
-    return None, None, None, refresh_conversation_list_fn(), gr.update(visible=False), gr.update(visible=False), gr.update(), gr.update(visible=False)
+    return None, None, None, refresh_conversation_list_fn(), gr.update(visible=False), gr.update(visible=False), gr.update(), gr.update(visible=False), gr.update(visible=False)
