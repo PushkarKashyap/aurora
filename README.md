@@ -107,6 +107,20 @@ Open either in your browser.
 
 ---
 
+## ⚠️ Store Management
+
+Over time, you may create multiple file search stores in your Google AI account. A standalone script is provided to clean these up.
+
+To **delete all** file search stores associated with your API key, run the following command from your terminal:
+
+```bash
+python cleanup_stores.py
+```
+
+The script will ask for confirmation before proceeding with the deletion.
+
+---
+
 ## 🧠 Tech Stack
 - **Backend:** Python, Google Gemini API
 - **Frontend:** Gradio

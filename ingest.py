@@ -221,7 +221,7 @@ def view_knowledge_graph(config):
         return gr.update(visible=False), error_message
 
 
-def create_ingest_ui(client, store, config, delete_store_fn):
+def create_ingest_ui(client, store, config):
     """Creates the Gradio UI for the Ingest Codebase tab."""
     with gr.Tab("Ingest Codebase"):
         gr.Markdown("## Provide Local Codebase Path")
@@ -231,7 +231,6 @@ def create_ingest_ui(client, store, config, delete_store_fn):
             ingest_button = gr.Button("🚀 Ingest Files", variant="primary")
             build_graph_button = gr.Button("🕸️ Build Knowledge Graph", variant="secondary")
             view_graph_button = gr.Button("👁️ View Graph", variant="secondary")
-            delete_store_button = gr.Button("🗑️ Delete Store", variant="stop")
         ingest_status = gr.Markdown()
 
         ingest_button.click(
@@ -253,10 +252,4 @@ def create_ingest_ui(client, store, config, delete_store_fn):
             fn=lambda: view_knowledge_graph(config),
             inputs=[],
             outputs=[graph_viewer, ingest_status]
-        )
-
-        delete_store_button.click(
-            fn=delete_store_fn,
-            inputs=[],
-            outputs=[ingest_status]
         )

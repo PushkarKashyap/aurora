@@ -53,30 +53,6 @@ DB_NAME = CONFIG["database_name"]
 store = get_or_create_store(client, STORE_DISPLAY_NAME)
 init_db(DB_NAME) # Initialize the database on startup
 
-def delete_store():
-    """Deletes the existing file search store and creates a new one."""
-    global store
-    deleted_message = f"No store with display name '{STORE_DISPLAY_NAME}' found to delete."
-
-    try:
-        print("--- Deleting File Search Store ---")
-        for store_item in client.file_search_stores.list():
-            if store_item.display_name == STORE_DISPLAY_NAME:
-                print(f"Deleting store: {store_item.display_name} ({store_item.name})")
-                client.file_search_stores.delete(name=store_item.name, config={'force': True})
-                deleted_message = f"✅ Store '{store_item.display_name}' deleted."
-                break 
-    except Exception as e:
-        error_message = f"An error occurred during store deletion: {e}"
-        print(error_message)
-        return error_message
-
-    # Re-create a new store
-    store = get_or_create_store(client, STORE_DISPLAY_NAME)
-    recreate_message = f"A new store '{store.display_name}' has been created."
-    
-    return f"{deleted_message}\n{recreate_message}"
-
 # --- Gradio UI ---
 css = """
 .conversation-list-container {
@@ -98,7 +74,7 @@ with gr.Blocks(theme=gr.themes.Ocean(), css=css) as demo:
     gr.Markdown("<h1 style='text-align: center;'>Aurora Codex</h1>")
 
     # Create the Ingest tab by calling the function from ingest.py
-    create_ingest_ui(client, store, CONFIG, delete_store)
+    create_ingest_ui(client, store, CONFIG)
 
     # Create the Chat tab by calling the function from chat.py
     create_chat_ui(client, store, PROMPTS, CONFIG)
