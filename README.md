@@ -104,15 +104,24 @@ aurora/
 ├── .env.example
 ├── .gitignore
 ├── app.py                  # <-- Main application entrypoint
+├── chat.py                 # <-- Core chat logic and database interactions
+├── ingest.py               # <-- File ingestion and indexing logic
 ├── prompts.yaml            # <-- All LLM prompts
 ├── requirements.txt
-└── README.md
+├── README.md
+├── .git/                   # <-- Git version control directory
+├── .gradio/                # <-- Gradio-related files (e.g., certificates)
+├── data/                   # <-- Directory for data files (if any)
+├── __pycache__/            # <-- Python cache files
+└── venv/                   # <-- Python virtual environment
 ```
 
 ---
 
 ## 📝 Notes
-*   The file search store name is hardcoded as `"aurora-code-analysis-store"`. If you want to use a different name, you'll need to modify `app.py`.
+*   The file search store name (`display_name`) can be configured in `config.yaml`.
+*   The ingestion process in `ingest.py` processes files sequentially. For very large codebases, this might be slow.
+*   The chat history is stored in a local SQLite database, configured via `config.yaml`.
 
 ---
 
