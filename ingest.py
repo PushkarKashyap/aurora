@@ -31,6 +31,12 @@ def ingest_files(directory_path, client, store, config):
         return
 
     yield f"Scanning directory: {directory_path}"
+    log_messages = []
+    def log(message):
+        log_messages.append(message)
+        return "\n".join(log_messages)
+
+    yield log(f"Scanning directory: {directory_path}")
     print(f"Scanning directory: {directory_path}")
 
     # Find all files in the directory
@@ -49,15 +55,18 @@ def ingest_files(directory_path, client, store, config):
 
     if not all_files:
         yield "No files found in the specified directory."
+        yield log("No files found in the specified directory.")
         return
 
     yield f"Found {len(all_files)} files. Ingesting... This may take a few minutes."
+    yield log(f"Found {len(all_files)} files. Ingesting... This may take a few minutes.")
     print(f"Ingesting {len(all_files)} files...")
 
     # Process one file at a time
     for file_path in all_files:
         file_name = os.path.basename(file_path)
         yield f"Uploading `{file_name}`..."
+        yield log(f"Uploading `{file_name}`...")
         print(f"Uploading: {file_name} from {file_path}")
 
         try:
@@ -82,17 +91,21 @@ def ingest_files(directory_path, client, store, config):
 
             # Wait for the current file's operation to complete before proceeding
             yield f"Indexing `{file_name}`..."
+            yield log(f"Indexing `{file_name}`...")
             while not operation.done:
                 time.sleep(4)
                 operation = client.operations.get(operation)
 
             yield f"✅ Indexed `{file_name}`"
+            yield log(f"✅ Indexed `{file_name}`")
         except Exception as e:
             yield f"❌ Error indexing `{file_name}`: {e}"
+            yield log(f"❌ Error indexing `{file_name}`: {e}")
             print(f"Error indexing {file_name}: {e}")
 
     final_message = f"✅ Ingestion complete for {len(all_files)} files. You can now use the Chat tab."
     yield final_message
+    yield log(f"✅ Ingestion complete for {len(all_files)} files. You can now use the Chat tab.")
 
 
 class CodeAnalyzer(ast.NodeVisitor):
@@ -147,6 +160,12 @@ def build_knowledge_graph(directory_path, config):
         return
 
     yield f"Scanning directory for graph construction: {directory_path}"
+    log_messages = []
+    def log(message):
+        log_messages.append(message)
+        return "\n".join(log_messages)
+
+    yield log(f"Scanning directory for graph construction: {directory_path}")
     python_files = []
     ignored_dirs = config["ingestion"]["ignored_directories"]
     ignored_files = config["ingestion"].get("ignored_files", [])
@@ -162,21 +181,25 @@ def build_knowledge_graph(directory_path, config):
 
     if not python_files:
         yield "No Python (.py) files found to build graph."
+        yield log("No Python (.py) files found to build graph.")
         return
 
     yield f"Found {len(python_files)} Python files. Building knowledge graph..."
+    yield log(f"Found {len(python_files)} Python files. Building knowledge graph...")
     knowledge_graph = {"nodes": [], "edges": []}
     existing_node_ids = set()
 
     for file_path in python_files:
         file_name = os.path.basename(file_path)
         yield f"Analyzing `{file_name}`..."
+        yield log(f"Analyzing `{file_name}`...")
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
 
             if not content.strip():
                 yield f"Skipping empty file: `{file_name}`"
+                yield log(f"Skipping empty file: `{file_name}`")
                 continue
 
             # Add the file itself as a node
@@ -198,6 +221,7 @@ def build_knowledge_graph(directory_path, config):
 
         except Exception as e:
             yield f"❌ Error analyzing `{file_name}`: {e}"
+            yield log(f"❌ Error analyzing `{file_name}`: {e}")
             print(f"Error analyzing {file_name}: {e}")
 
     graph_file_path = config["knowledge_graph"]["graph_file_path"]
@@ -205,8 +229,10 @@ def build_knowledge_graph(directory_path, config):
         with open(graph_file_path, 'w', encoding='utf-8') as f:
             json.dump(knowledge_graph, f, indent=2)
         yield f"✅ Knowledge graph built successfully and saved to `{graph_file_path}`."
+        yield log(f"✅ Knowledge graph built successfully and saved to `{graph_file_path}`.")
     except Exception as e:
         yield f"❌ Error saving knowledge graph: {e}"
+        yield log(f"❌ Error saving knowledge graph: {e}")
 
 
 def view_knowledge_graph(config):
@@ -241,7 +267,7 @@ def create_ingest_ui(client, store, config):
             ingest_button = gr.Button("🚀 Ingest Files", variant="primary")
             build_graph_button = gr.Button("🕸️ Build Knowledge Graph", variant="secondary")
             view_graph_button = gr.Button("👁️ View Graph", variant="secondary")
-        ingest_status = gr.Markdown()
+        ingest_status = gr.Textbox(label="Status", interactive=False, lines=8, show_copy_button=True)
 
         ingest_button.click(
             fn=lambda path, cfg: (yield from ingest_files(path, client, store, cfg)),
