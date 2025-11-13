@@ -1,6 +1,8 @@
 import sqlite3
 from datetime import datetime
 import tempfile
+import json
+import os
 from gradio.components import ChatMessage
 import gradio as gr
 from google.genai import types
@@ -147,6 +149,65 @@ def generate_report(conversation_id, db_name):
         return gr_update(value=temp_file.name, visible=True)
 
 
+def generate_visualization(conversation_id, db_name, config):
+    """
+    Generates a Mermaid diagram by filtering the knowledge graph based on the current conversation.
+    """
+    if not conversation_id:
+        return "```mermaid\ngraph TD;\n  A[No conversation selected.];\n```"
+
+    # 1. Load the full knowledge graph
+    graph_file_path = config.get("knowledge_graph", {}).get("graph_file_path")
+    if not graph_file_path or not os.path.exists(graph_file_path):
+        return "```mermaid\ngraph TD;\n  A[Knowledge graph not found. Please build it on the Ingest page.];\n```"
+    
+    with open(graph_file_path, 'r', encoding='utf-8') as f:
+        knowledge_graph = json.load(f)
+
+    # 2. Identify relevant entities from the chat conversation
+    history = load_conversation_from_db(db_name, conversation_id)
+    if not history:
+        return "```mermaid\ngraph TD;\n  A[Could not load conversation history.];\n```"
+
+    all_text = "".join([q + r for q, r in history])
+    all_node_ids = {node['id'] for node in knowledge_graph['nodes']}
+    
+    # Find nodes mentioned in the conversation
+    mentioned_nodes = {node_id for node_id in all_node_ids if node_id in all_text}
+
+    if not mentioned_nodes:
+        return "```mermaid\ngraph TD;\n  A[No specific code entities found in this conversation to visualize.];\n```"
+
+    # 3. Build the subgraph: include mentioned nodes and their direct neighbors
+    subgraph_nodes = set(mentioned_nodes)
+    subgraph_edges = []
+
+    for edge in knowledge_graph['edges']:
+        source, target = edge['source'], edge['target']
+        if source in mentioned_nodes or target in mentioned_nodes:
+            subgraph_nodes.add(source)
+            subgraph_nodes.add(target)
+            subgraph_edges.append(edge)
+
+    # 4. Convert the subgraph to Mermaid syntax
+    mermaid_string = "graph TD;\n"
+    # Create safe IDs for mermaid (replace dots, etc.)
+    safe_ids = {node_id: node_id.replace('.', '_').replace('-', '_') for node_id in subgraph_nodes}
+
+    for node_id in subgraph_nodes:
+        # Highlight the nodes that were directly mentioned in the chat
+        if node_id in mentioned_nodes:
+            mermaid_string += f'  {safe_ids[node_id]}["`{node_id}`"];\n'
+            mermaid_string += f'  style {safe_ids[node_id]} fill:#0b5394,stroke:#fff,stroke-width:2px,color:#fff;\n'
+        else:
+            mermaid_string += f'  {safe_ids[node_id]}["{node_id}"];\n'
+
+    for edge in subgraph_edges:
+        source, target = edge['source'], edge['target']
+        if source in safe_ids and target in safe_ids:
+            mermaid_string += f"  {safe_ids[source]} -->|{edge['type']}| {safe_ids[target]};\n"
+
+    return f"```mermaid\n{mermaid_string}\n```"
 
 # --- Core Chat Logic ---
 def chat_fn(message, history, chat_session, conversation_id_state, client, store, prompts, config):
@@ -330,6 +391,7 @@ def create_chat_ui(client, store, prompts, config):
 
                 generate_report_button = gr.Button("📄 Generate Report", variant="secondary", visible=False)
                 report_file = gr.File(label="Download Report", visible=False, interactive=False)
+                visualize_button = gr.Button("🎨 Visualize Impact", variant="secondary", visible=False) # This button is now connected to the knowledge graph
 
             with gr.Column(scale=4) as main_column:
                 chat_session_state = gr.State(None)
@@ -346,6 +408,9 @@ def create_chat_ui(client, store, prompts, config):
                     chat_input = gr.Textbox(show_label=False, placeholder="Enter your message...", scale=4, container=False)
                     assess_criticality_checkbox = gr.Checkbox(label="Assess Criticality", value=False, scale=1)
                     send_button = gr.Button("Send", variant="primary", scale=1)
+        
+        with gr.Tab("Visualization"):
+            visualization_output = gr.Markdown("No visualization generated yet. Ask a question and then click 'Visualize Impact'.", elem_id="visualization-output")
 
         def toggle_sidebar(is_sidebar_visible):
             """Toggles the visibility of the sidebar and expands/contracts the main chat area."""
@@ -372,28 +437,31 @@ def create_chat_ui(client, store, prompts, config):
         refresh_convos_button.click(fn=refresh_fn, outputs=[conversation_list])
 
         load_conversation_fn = lambda conv_id: load_conversation(conv_id, db_name)
-        conversation_list.input(fn=load_conversation_fn, inputs=[conversation_list], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file])
+        conversation_list.input(fn=load_conversation_fn, inputs=[conversation_list], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button])
 
-        new_chat_button.click(fn=start_new_chat, outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file])
+        new_chat_button.click(fn=start_new_chat, outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button])
 
         delete_conversation_fn = lambda conv_id: delete_conversation(conv_id, db_name, refresh_fn)
-        delete_conversation_button.click(fn=delete_conversation_fn, inputs=[conversation_id_state], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file])
+        delete_conversation_button.click(fn=delete_conversation_fn, inputs=[conversation_id_state], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button])
 
         generate_report_fn = lambda conv_id: generate_report(conv_id, db_name)
         generate_report_button.click(fn=generate_report_fn, inputs=[conversation_id_state], outputs=[report_file])
+
+        visualize_fn = lambda conv_id: generate_visualization(conv_id, db_name, config)
+        visualize_button.click(fn=visualize_fn, inputs=[conversation_id_state], outputs=[visualization_output], show_progress="hidden")
 
 def load_conversation(conversation_id, db_name):
     """Loads a past conversation from the database into the chat window."""
     from gradio import update as gr_update # Local import to avoid circular dependency issues
     if not conversation_id:
-        return [], None, None, gr_update(value=None), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False)
+        return [], None, None, gr_update(value=None), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False)
 
     print(f"Loading conversation: {conversation_id}")
     history = load_conversation_from_db(db_name, conversation_id)
 
     if not history:
         # Handle case where history is not found or there was a DB error
-        return [], None, None, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False)
+        return [], None, None, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False), gr_update(visible=True)
 
     # Reconstruct Gradio's chatbot history format for type="messages"
     chat_history_formatted = []
@@ -403,22 +471,22 @@ def load_conversation(conversation_id, db_name):
     # When loading a conversation, we must start a new backend chat session
     # because the session object cannot be serialized and stored.
     # The context is rebuilt by Gradio's history.
-    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False)
+    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False), gr_update(visible=True)
 
 def start_new_chat():
     """Clears the chat interface and starts a new session."""
-    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr_update(visible=False), gr.update(visible=False)
 
 def delete_conversation(conversation_id, db_name, refresh_conversation_list_fn):
     """Deletes a conversation and updates the UI."""
     if not conversation_id:
-        return None, None, None, gr.update(), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+        return None, None, None, gr.update(), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
     success = delete_conversation_from_db(db_name, conversation_id)
 
     if not success:
         # If deletion fails, don't change the UI, just log the error.
-        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(visible=True), gr.update(visible=True), gr.update()
+        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(visible=True), gr.update(visible=True), gr.update(), gr.update(visible=True)
 
     # After successful deletion, clear the chat, refresh the list, and hide the button
-    return None, None, None, refresh_conversation_list_fn(), gr.update(visible=False), gr.update(visible=False), gr.update()
+    return None, None, None, refresh_conversation_list_fn(), gr.update(visible=False), gr.update(visible=False), gr.update(), gr.update(visible=False)

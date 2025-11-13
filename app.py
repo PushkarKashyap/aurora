@@ -89,6 +89,10 @@ css = """
     min-width: 40px !important;
     max-width: 40px !important;
 }
+#visualization-output {
+    min-height: 600px;
+    overflow: auto;
+}
 """
 with gr.Blocks(theme=gr.themes.Ocean(), css=css) as demo:
     gr.Markdown("<h1 style='text-align: center;'>Aurora Codex</h1>")
