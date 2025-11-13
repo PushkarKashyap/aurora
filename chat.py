@@ -277,7 +277,8 @@ def create_chat_ui(client, store, prompts, config):
                 conversation_list = gr.Radio(
                     label="Past Conversations",
                     interactive=True,
-                    elem_classes=["conversation-list"]
+                    show_label=False,
+                    elem_classes=["conversation-list-container"]
                 )
                 delete_conversation_button = gr.Button("🗑️ Delete Selected", variant="stop", visible=False)
 

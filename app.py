@@ -78,7 +78,15 @@ def delete_store():
     return f"{deleted_message}\n{recreate_message}"
 
 # --- Gradio UI ---
-with gr.Blocks(theme=gr.themes.Ocean()) as demo:
+css = """
+.conversation-list-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+"""
+with gr.Blocks(theme=gr.themes.Ocean(), css=css) as demo:
     gr.Markdown("<h1 style='text-align: center;'>Aurora Codex</h1>")
 
     # Create the Ingest tab by calling the function from ingest.py
