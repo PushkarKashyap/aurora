@@ -301,18 +301,29 @@ def chat_fn(message, history, chat_session, conversation_id_state, client, store
     return response_text, chat_session, conversation_id_state, new_conversation_started
 
 
+def _get_conversation_controls_updates(visible: bool, report_file_value=None):
+    """Helper to generate gr.update dictionaries for conversation-specific controls."""
+    # Returns a tuple of gr.update objects in the order they appear in conversation_controls
+    return (
+        gr.update(visible=visible),  # delete_conversation_button
+        gr.update(visible=visible),  # generate_report_button
+        gr.update(visible=visible if report_file_value else False, value=report_file_value), # report_file
+        gr.update(visible=visible),  # visualize_button
+        gr.update(visible=visible)   # visualize_neighbors_checkbox
+    )
+
 def load_conversation(conversation_id, db_name):
     """Loads a past conversation from the database into the chat window."""
     from gradio import update as gr_update # Local import to avoid circular dependency issues
     if not conversation_id:
-        return [], None, None, gr_update(value=None), gr_update(visible=False)
+        return [], None, None, gr_update(value=None), *_get_conversation_controls_updates(False)
 
     print(f"Loading conversation: {conversation_id}")
     history = load_conversation_from_db(db_name, conversation_id)
 
     if not history:
         # Handle case where history is not found or there was a DB error
-        return [], None, None, gr_update(value=conversation_id), gr_update(visible=True)
+        return [], None, None, gr_update(value=conversation_id), *_get_conversation_controls_updates(True)
 
     # Reconstruct Gradio's chatbot history format for type="messages"
     chat_history_formatted = []
@@ -322,7 +333,7 @@ def load_conversation(conversation_id, db_name):
     # When loading a conversation, we must start a new backend chat session
     # because the session object cannot be serialized and stored.
     # The context is rebuilt by Gradio's history.
-    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), gr_update(visible=True)
+    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), *_get_conversation_controls_updates(True)
 
 
 # --- UI Wrapper Functions ---
@@ -353,37 +364,37 @@ def chat_wrapper(message, history, assess_criticality, chat_session, conversatio
     # Return all the updated states, clearing the input textbox
     return history, "", new_chat_session, new_conversation_id, conversation_list_update
 
-def start_new_chat():
-    """Clears the chat interface and starts a new session.""" # Duplicated function, will be removed
-    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+def get_formatted_conversations(db_name):
+    """Fetches and formats conversations for the gr.Radio component."""
+    convos = get_conversations(db_name)
+    # Format for gr.Radio: list of (label, value) tuples
+    return [(f"{title[:40]}..." if len(title) > 40 else title, conv_id) for conv_id, title in convos]
 
 def create_chat_ui(client, store, prompts, config):
     """Creates the Gradio UI for the Chat tab."""
     db_name = config["database_name"]
 
     with gr.Tab("Chat") as chat_tab:
-        sidebar_visible_state = gr.State(True)
         with gr.Row():
-            sidebar_toggle_button = gr.Button("◀️", size="sm", scale=0, elem_classes=["sidebar-toggle"])
-            with gr.Column(scale=1, visible=True) as sidebar_column:
-                # with gr.Group():
+            with gr.Sidebar():
                 new_chat_button = gr.Button("➕ New Chat", variant="primary")
                 refresh_convos_button = gr.Button("🔄 Refresh", variant="secondary")
                 conversation_list = gr.Radio(
+                    choices=get_formatted_conversations(db_name),
                     # Note: The 'height' parameter is not standard. CSS is used instead.
                     label="Past Conversations",
                     interactive=True,
                     show_label=False,
                     elem_classes=["conversation-list-container"]
                 )
-                delete_conversation_button = gr.Button("🗑️ Delete Selected", variant="stop", visible=False)
+                with gr.Group(): # Group controls for easier update
+                    delete_conversation_button = gr.Button("🗑️ Delete Selected", variant="stop", visible=False, elem_id="delete_conversation_button")
+                    generate_report_button = gr.Button("📄 Generate Report", variant="secondary", visible=False, elem_id="generate_report_button")
+                    report_file = gr.File(label="Download Report", visible=False, interactive=False, elem_id="report_file")
+                    visualize_button = gr.Button("🎨 Visualize Impact", variant="secondary", visible=False, elem_id="visualize_button")
+                    visualize_neighbors_checkbox = gr.Checkbox(label="Show Neighbors", value=False, visible=False, scale=1, elem_id="visualize_neighbors_checkbox")
 
-                generate_report_button = gr.Button("📄 Generate Report", variant="secondary", visible=False)
-                report_file = gr.File(label="Download Report", visible=False, interactive=False)
-                visualize_button = gr.Button("🎨 Visualize Impact", variant="secondary", visible=False)
-                visualize_neighbors_checkbox = gr.Checkbox(label="Show Neighbors", value=False, visible=False, scale=1)
-
-            with gr.Column(scale=4) as main_column:
+            with gr.Column(scale=4):
                 chat_session_state = gr.State(None)
                 conversation_id_state = gr.State(None)
                 
@@ -402,17 +413,9 @@ def create_chat_ui(client, store, prompts, config):
         with gr.Tab("Visualization"):
             visualization_output = gr.Markdown("No visualization generated yet. Ask a question and then click 'Visualize Impact'.", elem_id="visualization-output")
 
-        def toggle_sidebar(is_sidebar_visible):
-            """Toggles the visibility of the sidebar and expands/contracts the main chat area."""
-            new_visibility = not is_sidebar_visible
-            button_text = "◀️" if new_visibility else "▶️"
-            return gr.update(visible=new_visibility), button_text, new_visibility
-        
         def populate_example(evt: gr.SelectData):
             """Populates the chat input with the text from the clicked example."""
             return evt.value['text']
-
-        sidebar_toggle_button.click(fn=toggle_sidebar, inputs=[sidebar_visible_state], outputs=[sidebar_column, sidebar_toggle_button, sidebar_visible_state])
 
         # --- Event Handlers ---
         refresh_fn = lambda: refresh_conversation_list(db_name)
@@ -423,16 +426,29 @@ def create_chat_ui(client, store, prompts, config):
 
         chatbot.example_select(fn=populate_example, inputs=None, outputs=[chat_input])
 
-        chat_tab.select(fn=refresh_fn, outputs=[conversation_list])
-        refresh_convos_button.click(fn=refresh_fn, outputs=[conversation_list])
-
         load_conversation_fn = lambda conv_id: load_conversation(conv_id, db_name)
-        conversation_list.input(fn=load_conversation_fn, inputs=[conversation_list], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox])
+        conversation_controls = [delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox]
 
-        new_chat_button.click(fn=start_new_chat, outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox])
+        refresh_convos_button.click(fn=refresh_fn, outputs=[conversation_list] + conversation_controls)
+
+        conversation_list.input(
+            fn=load_conversation_fn,
+            inputs=[conversation_list],
+            outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list] + conversation_controls
+        )
+
+        new_chat_button.click(
+            fn=lambda: start_new_chat(db_name),
+            outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list] + conversation_controls,
+            show_progress="hidden"
+        )
 
         delete_conversation_fn = lambda conv_id: delete_conversation(conv_id, db_name, refresh_fn)
-        delete_conversation_button.click(fn=delete_conversation_fn, inputs=[conversation_id_state], outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list, delete_conversation_button, generate_report_button, report_file, visualize_button, visualize_neighbors_checkbox])
+        delete_conversation_button.click(
+            fn=delete_conversation_fn,
+            inputs=[conversation_id_state],
+            outputs=[chatbot, chat_session_state, conversation_id_state, conversation_list] + conversation_controls
+        )
 
         generate_report_fn = lambda conv_id: generate_report(conv_id, db_name)
         generate_report_button.click(fn=generate_report_fn, inputs=[conversation_id_state], outputs=[report_file])
@@ -440,50 +456,31 @@ def create_chat_ui(client, store, prompts, config):
         visualize_fn = lambda conv_id, show_neighbors: generate_visualization(conv_id, db_name, config, show_neighbors)
         visualize_button.click(fn=visualize_fn, inputs=[conversation_id_state, visualize_neighbors_checkbox], outputs=[visualization_output], show_progress="hidden")
 
-def load_conversation(conversation_id, db_name):
-    """Loads a past conversation from the database into the chat window."""
-    from gradio import update as gr_update # Local import to avoid circular dependency issues
-    if not conversation_id:
-        return [], None, None, gr_update(value=None), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False), gr_update(visible=False)
-
-    print(f"Loading conversation: {conversation_id}")
-    history = load_conversation_from_db(db_name, conversation_id)
-
-    if not history:
-        # Handle case where history is not found or there was a DB error
-        return [], None, None, gr_update(value=conversation_id), gr_update(visible=True), gr_update(visible=True), gr_update(visible=False), gr_update(visible=True), gr_update(visible=True)
-
-    # Reconstruct Gradio's chatbot history format for type="messages"
-    chat_history_formatted = []
-    for query, response in history:
-        chat_history_formatted.extend([ChatMessage(role="user", content=query), ChatMessage(role="assistant", content=response)])
-
-    # When loading a conversation, we must start a new backend chat session
-    # because the session object cannot be serialized and stored.
-    # The context is rebuilt by Gradio's history.
-    return chat_history_formatted, None, conversation_id, gr_update(value=conversation_id), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)
-
-def start_new_chat():
+def start_new_chat(db_name):
     """Clears the chat interface and starts a new session."""
-    return None, None, None, gr.update(value=None), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+    # Clear chat, session, and conversation selection. Also hide controls.
+    formatted_convos = get_formatted_conversations(db_name)
+    # Create a new update object that both refreshes choices and clears the selection
+    conversation_list_update = gr.update(choices=formatted_convos, value=None)
+    return None, None, None, conversation_list_update, *_get_conversation_controls_updates(False)
 
 def refresh_conversation_list(db_name):
     """Refreshes the list of conversations in the sidebar."""
-    convos = get_conversations(db_name)
-    # Format for gr.Radio: list of (label, value) tuples
-    formatted_convos = [(f"{title[:40]}..." if len(title) > 40 else title, conv_id) for conv_id, title in convos]
-    return gr.update(choices=formatted_convos)
+    formatted_convos = get_formatted_conversations(db_name)
+    return gr.update(choices=formatted_convos), *_get_conversation_controls_updates(False)
 
 def delete_conversation(conversation_id, db_name, refresh_conversation_list_fn):
     """Deletes a conversation and updates the UI."""
     if not conversation_id:
-        return None, None, None, gr.update(), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+        return None, None, None, gr.update(), *_get_conversation_controls_updates(False)
 
     success = delete_conversation_from_db(db_name, conversation_id)
 
     if not success:
         # If deletion fails, don't change the UI, just log the error.
-        return gr.update(), gr.update(), gr.update(), gr.update(), gr.update(visible=True), gr.update(visible=True), gr.update(), gr.update(visible=True), gr.update(visible=True)
+        return gr.update(), gr.update(), gr.update(), gr.update(), *_get_conversation_controls_updates(True)
 
     # After successful deletion, clear the chat, refresh the list, and hide the button
-    return None, None, None, refresh_conversation_list_fn(), gr.update(visible=False), gr.update(visible=False), gr.update(), gr.update(visible=False), gr.update(visible=False)
+    # We call refresh_fn() which returns a tuple of updates for the list and controls.
+    conversation_list_update, *control_updates = refresh_conversation_list_fn()
+    return None, None, None, conversation_list_update, *control_updates
