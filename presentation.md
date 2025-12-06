@@ -28,6 +28,9 @@ A conversational AI assistant that transforms codebase analysis.
 
 - **Conversational Code Analysis:** Ingest any codebase and start a conversation to understand its structure and dependencies.
 - **Knowledge Graph Generation:** Automatically builds a structural map of your Python code to understand relationships between components.
+- **Refactored Architecture:** Clean separation of concerns with `core/` (logic) and `ui/` (interface) packages.
+- **Real-time Status Updates:** Provides immediate feedback on agent activities (tool execution, thinking) via streaming updates.
+- **Dynamic Repository Management:** Support for multiple repositories with isolated knowledge graphs and vector stores.
 - **Advanced Impact Analysis:**
     - **Criticality Assessment:** Prioritizes impacted components (High, Medium, Low).
     - **Dynamic Dependency Visualization:** Generates Mermaid.js graphs on-the-fly to visualize impact.
@@ -37,19 +40,20 @@ A conversational AI assistant that transforms codebase analysis.
 
 ## How It Works: A Simple Workflow
 
-1.  **Ingest Codebase:** Provide the path to your local project to create a searchable index.
-2.  **Build Knowledge Graph:** Perform a static analysis of `.py` files to map out functions, classes, and their connections.
-3.  **Chat & Analyze:** Ask questions, request criticality assessments, and explore your code's architecture.
-4.  **Visualize & Report:** Generate dependency graphs and download a complete report of your findings.
+1.  **Select or Add Repository:** The user chooses a repository from a dropdown in the UI. The list is managed by `repositories.json`.
+2.  **Ingest Codebase:** For the selected repository, the system creates or loads its dedicated Vector Store and Knowledge Graph. Logic is handled by `core/ingest.py` and `core/store_utils.py`.
+3.  **Chat & Analyze:** The user interacts with the AI. The chat engine (`core/chat_engine.py`) is scoped to the selected repository, ensuring all analysis, RAG, and history are contextually correct.
+4.  **Visualize & Report:** The system generates dependency graphs and reports based on the analysis of the selected repository.
 
 ---
 
 ## Technology Stack
 
-- **Backend:** Python
+- **Backend Logic:** Python (`core/`)
 - **Language Model:** Google Gemini 2.5 Flash
-- **Frontend:** Gradio
-- **Code Analysis:** Python AST (Abstract Syntax Tree) module
+- **Frontend:** Gradio (`ui/`)
+- **Database:** SQLite (Chat History) & Google AI File Search (Vector Embeddings)
+- **Code Analysis:** Python AST (Abstract Syntax Tree)
 
 ---
 
@@ -60,9 +64,9 @@ A conversational AI assistant that transforms codebase analysis.
 **With Aurora Codex:**
 
 1.  **User asks:** "What is the impact of removing the `calculate_discount` function?"
-2.  **Aurora Finds:** Identifies all modules and functions that call `calculate_discount()`.
-3.  **Aurora Assesses:** Classifies the impact on each component. A critical service using it would be "High Impact," while a test file would be "Low Impact."
-4.  **Aurora Visualizes:** Generates a dependency graph showing exactly which parts of the application would break, allowing the developer to plan the refactoring effort efficiently.
+2.  **Aurora Finds:** Identifies all modules and functions that call `calculate_discount()` using its Knowledge Graph for the specific repository.
+3.  **Aurora Assesses:** Classifies the impact on each component.
+4.  **Aurora Visualizes:** Streaming updates keep the user informed while it generates a dependency graph showing breaking changes.
 
 ---
 
@@ -71,38 +75,24 @@ A conversational AI assistant that transforms codebase analysis.
 ```mermaid
 graph TD
     subgraph "User Interface (Gradio)"
-        A[app.py - Main Entry]
-        B[Ingest Tab]
-        C[Chat Tab]
-        D[Visualization Tab]
+        A[UI Tabs <br> Ingest & Chat]
     end
 
-    subgraph "Backend Services"
-        E[ingest.py]
-        F[chat.py]
-        G[Google Gemini API]
-        H[SQLite Database]
-        I[knowledge_graph.json]
-        J[File System]
-        K[Google AI File Search Store]
+    subgraph "Backend Core"
+        B[Chat & Ingest Logic <br> (core/)]
     end
 
-    A --> B
-    A --> C
-    C --> D
+    subgraph "Data Stores (Per-Repository)"
+        C[Google AI File Search Store]
+        D[Knowledge Graph]
+    end
 
-    B --> E
-    C --> F
+    E[Shared Chat History <br> (SQLite)]
 
-    E -- "Scans Files" --> J
-    E -- "Uploads Files" --> K
-    E -- Creates --> I
+    A -- "User selects repository" --> B
+    B -- "Operates on" --> C & D
+    B -- "Logs to" --> E
 
-    F -- "Interacts with (for Chat and RAG)" --> G
-    F -- "Manages Chat History in" --> H
-    F -- "Reads for Visualization from" --> I
-
-    G -- Uses --> K
 ```
 
 ---

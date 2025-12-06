@@ -16,8 +16,9 @@ Aurora Codex is an advanced, conversational AI assistant designed to perform dee
 
 ## ✨ Key Features
 
-- **Conversational Code Analysis (RAG):** Ingest any codebase and start a conversation. Ask questions about functions, dependencies, and potential impacts in natural language.
-- **Static Knowledge Graph Generation:** Build a detailed structural map of your Python codebase. The tool uses AST to parse `.py` files, identify entities (functions, classes) and relationships (imports, calls), and saves this as a `knowledge_graph.json`.
+- **Refactored Architecture:** Scalable design with separate `core/` (logic) and `ui/` (interface) packages.
+- **Dynamic Repository Management:** Support for multiple repositories with isolated knowledge graphs and vector stores.
+- **Real-time Status Updates:** Provides immediate feedback on agent activities (tool execution, thinking) via streaming updates.
 - **Advanced Impact Analysis:**
   - **Criticality Assessment:** Request a prioritized analysis of impacted components, classified as High, Medium, or Low, with justifications for each.
   - **Dynamic Dependency Visualization:** Generate on-the-fly dependency graphs using Mermaid.js based on your conversation to visually understand component relationships.
@@ -97,13 +98,22 @@ Open either in your browser.
 ---
 
 ### 🔎 Step 5: Analyze Your Codebase
-1.  **Ingest Files:** On the **"Ingest Codebase"** tab, provide the path to your local codebase and click **"Ingest Files"**. This creates a searchable index for the RAG functionality.
-2.  **Build Knowledge Graph:** Click **"Build Knowledge Graph"**. This performs a static analysis of all `.py` files and creates a `knowledge_graph.json` file. You can view the result by clicking **"View Graph"**.
-3.  **Chat & Analyze:** Switch to the **"Chat"** tab.
-    - Ask questions about your code's functionality and dependencies.
-    - Use the **"Assess Criticality"** checkbox for a deeper, prioritized analysis.
-    - After a conversation, click **"Visualize Impact"** to see a dependency diagram in the **"Visualization"** tab.
-    - Download your session as a report using the **"Generate Report"** button.
+1.  **Add and Select a Repository:**
+    *   Go to the **"Ingest Codebase"** tab.
+    *   Click **"Add New Repository"**. Provide a name and the absolute local path to your codebase. This adds your repo to the `repositories.json` file and makes it available in the dropdown menu.
+    *   Select your newly added repository from the **"Select Repository"** dropdown.
+
+2.  **Ingest and Analyze:**
+    *   With your repository selected, click **"Ingest Files"**. This creates a searchable vector index for the RAG functionality, isolated to this specific repository.
+    *   Click **"Build Knowledge Graph"**. This performs a static analysis of all `.py` files and saves a graph in the `data/graphs/` folder.
+
+3.  **Chat with your Code:**
+    *   Switch to the **"Chat"** tab.
+    *   Ensure your desired repository is selected in the dropdown.
+    *   Ask questions about your code. All conversations, analysis, and history are now scoped to that repository.
+    *   Use the **"Assess Criticality"** checkbox for a deeper, prioritized analysis.
+    *   After a conversation, click **"Visualize Impact"** to see a dependency diagram in the **"Visualization"** tab.
+    *   Download your session as a report using the **"Generate Report"** button.
 
 ---
 
@@ -122,9 +132,10 @@ The script will ask for confirmation before proceeding with the deletion.
 ---
 
 ## 🧠 Tech Stack
-- **Backend:** Python, Google Gemini API
-- **Frontend:** Gradio
+- **Backend:** Python (`core/`)
+- **Frontend:** Gradio (`ui/`)
 - **LLM:** Gemini 2.5 Flash (default)
+- **Vectors:** Google AI File Search Store
 
 ---
 
@@ -132,29 +143,32 @@ The script will ask for confirmation before proceeding with the deletion.
 
 ```
 aurora/
-├── .env                    # <-- Local environment configuration (created from example)
-├── config.yaml             # <-- Application-wide configuration (e.g., store name, ignored dirs)
-├── .env.example
-├── .gitignore
+├── core/                   # <-- Backend Business Logic
+│   ├── chat_engine.py      # <-- Chat logic, RAG, and DB ops
+│   ├── ingest.py           # <-- Ingestion and knowledge graph logic
+│   ├── tools.py            # <-- Agent tools (file access, repo management)
+│   └── store_utils.py      # <-- Vector store management (one per repo)
+├── ui/                     # <-- Frontend UI Components
+│   ├── app_ui.py           # <-- Main UI composition
+│   ├── chat_tab.py         # <-- Chat tab implementation
+│   └── ingest_tab.py       # <-- Ingest tab implementation
+├── data/
+│   └── graphs/             # <-- Stores generated knowledge graphs
 ├── app.py                  # <-- Main application entrypoint
-├── chat.py                 # <-- Core chat logic and database interactions
-├── ingest.py               # <-- File ingestion and indexing logic
+├── config.yaml             # <-- Application-wide configuration
+├── repositories.json       # <-- Stores paths to user-added codebases
+├── .env                    # <-- Local environment configuration (API keys)
 ├── prompts.yaml            # <-- All LLM prompts
 ├── requirements.txt
 ├── README.md
-├── .git/                   # <-- Git version control directory
-├── .gradio/                # <-- Gradio-related files (e.g., certificates)
-├── data/                   # <-- Directory for data files (if any)
-├── __pycache__/            # <-- Python cache files
-└── venv/                   # <-- Python virtual environment
 ```
 
 ---
 
 ## 📝 Notes
-*   The file search store name (`display_name`) can be configured in `config.yaml`.
-*   The ingestion process in `ingest.py` processes files sequentially. For very large codebases, this might be slow.
-*   The chat history is stored in a local SQLite database, configured via `config.yaml`.
+*   **Refactoring:** The codebase is split into `core` and `ui` for maintainability.
+*   **Configuration:** You can ignore specific files/directories in `config.yaml`.
+*   **Database:** Chat history is stored in local `aurora_history.db` and is filterable by repository.
 
 ---
 

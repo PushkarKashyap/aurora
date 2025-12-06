@@ -2,50 +2,84 @@
 ```mermaid
 graph TD
     subgraph "User Interface (Gradio)"
-        A[app.py - Main Entry]
-        B[Ingest Tab]
-        C[Chat Tab]
-        D[Visualization Tab]
+        direction LR
+        A[ui/app_ui.py]
+        B[ui/ingest_tab.py]
+        C[ui/chat_tab.py]
+
+        A --> B & C
     end
 
-    subgraph "Backend Services"
-        E[ingest.py]
-        F[chat.py]
-        G[Google Gemini API]
-        H[SQLite Database]
-        I[knowledge_graph.json]
-        J[File System]
-        K[Google AI File Search Store]
+    subgraph "Data & Configuration"
+        direction LR
+        D[repositories.json]
+        E[config.yaml]
     end
 
-    A --> B
-    A --> C
-    C --> D
+    subgraph "Backend Core"
+        direction LR
+        F[core/tools.py]
+        G[core/ingest.py]
+        H[core/chat_engine.py]
+        I[core/store_utils.py]
+    end
 
-    B --> E
-    C --> F
+    subgraph "External & Data Stores"
+        direction LR
+        J[Google Gemini API]
+        K[Google AI File Search Stores - One per repository]
+        L[Knowledge Graphs - data/graphs/]
+        M[SQLite DB - aurora_history.db]
+    end
 
-    E -- "Scans Files" --> J
-    E -- "Uploads Files" --> K
-    E -- Creates --> I
+    %% UI to Backend Interactions
+    B -- "1. User selects/adds repo" --> F
+    C -- "2. User selects repo" --> F
+    F -- "Provides repo list" --> B & C
+    D -- "Manages" --> F
 
-    F -- "Interacts with (for Chat and RAG)" --> G
-    F -- "Manages Chat History in" --> H
-    F -- "Reads for Visualization from" --> I
+    B -- "3. Ingest(repo_path)" --> G
+    C -- "4a. Chat(repo_path)" --> H
+    C -- "4b. Get History(repo_path)" --> M
 
-    G -- Uses --> K
+    %% Backend Core Logic
+    G -- "Uses" --> I
+    H -- "Uses" --> I
+    I -- "Manages Stores" --> K
+
+    G -- "Scans files" --> F
+    G -- "Creates/Updates" --> L
+    G -- "Uploads to" --> K
+
+    H -- "Sends prompts to" --> J
+    H -- "Uses RAG data from" --> K
+    H -- "Reads for visualization" --> L
+    H -- "Logs chat to" --> M
+
+    E -- "Reads" --> F
 ```
 
-This diagram illustrates the architecture of the Aurora Codex application.
+This diagram illustrates the multi-repository architecture of the Aurora Codex application. The key is that all major operations are isolated at a repository level, selected by the user in the UI.
 
-*   The **User Interface** is built with Gradio and is divided into several tabs.
-*   `app.py` is the main entry point that launches the UI.
-*   The **Ingest Tab** uses `ingest.py` to:
-    *   Scan the local **File System**.
-    *   Upload files to the **Google AI File Search Store**.
-    *   Create the **knowledge_graph.json** by analyzing Python files.
-*   The **Chat Tab** is powered by `chat.py`, which:
-    *   Communicates with the **Google Gemini API** to get chat responses, using the **File Search Store** for Retrieval-Augmented Generation (RAG).
-    *   Manages the conversation history in a **SQLite Database**.
-    *   Reads the **knowledge_graph.json** to generate visualizations.
-*   The **Visualization Tab** displays the diagrams created by `chat.py`.
+*   **Configuration**:
+    *   `config.yaml`: Main application configuration.
+    *   `repositories.json`: A simple JSON file that stores the name and local path for each registered repository.
+
+*   **User Interface (`ui/`)**:
+    *   `ui/app_ui.py`: Composes the main Gradio interface with two primary tabs.
+    *   `ui/ingest_tab.py`: Provides a dropdown to select a repository (from `repositories.json`) and a button to add new ones. When ingestion is triggered, it passes the selected repository's path to the backend.
+    *   `ui/chat_tab.py`: Features a dropdown to switch between repository contexts. All chat interactions, history retrieval, and graph visualizations are scoped to the selected repository path.
+
+*   **Backend Core (`core/`)**:
+    *   `core/tools.py`: Contains helper functions, including the critical tools for loading the repository list from `repositories.json` and setting the active workspace path for the agent's file system tools.
+    *   `core/ingest.py`: Receives a `repo_path` and handles file scanning, knowledge graph creation (`data/graphs/`), and file uploads to the appropriate data store.
+    *   `core/store_utils.py`: Manages the lifecycle of Google AI File Search Stores. It ensures that each repository has its own isolated store by creating, loading, or deleting stores based on the provided `repo_path`.
+    *   `core/chat_engine.py`: The main RAG and chat logic engine. It is instantiated with a specific `repo_path` and uses that path to:
+        *   Interact with the correct Google AI File Search Store via `store_utils.py`.
+        *   Query the corresponding knowledge graph.
+        *   Filter chat history from the central SQLite database.
+
+*   **Data Stores**:
+    *   **Google AI File Search**: Each repository's vectorized data is stored in a separate, isolated File Search Store.
+    *   **Knowledge Graphs**: Graph data (from AST analysis) is stored as individual JSON files in `data/graphs/`. The filename is a hash of the repository's path.
+    *   **SQLite**: A single database (`aurora_history.db`) stores all chat history. A `repo_path` column is used to filter history for the UI.

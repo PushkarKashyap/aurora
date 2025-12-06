@@ -13,7 +13,8 @@ gemini_model:
 
 # Knowledge Graph Configuration
 knowledge_graph:
-  graph_file_path: "knowledge_graph.json"
+  # Graphs are stored in data/graphs/ using a hash of the repo path (e.g., graph_<hash>.json)
+  graph_directory: "data/graphs"
 
 # File Ingestion Configuration
 ingestion:
@@ -27,8 +28,68 @@ ingestion:
     - .gradio
   ignored_files:
     - LICENSE
-    - knowledge_graph.json
     - aurora_history.db
+    - repositories.json
+    - __init__.py
+  allowed_extensions:
+    - .pdf
+    - .docm
+    - .docx
+    - .dotm
+    - .dotx
+    - .xlsx
+    - .xlsm
+    - .xltx
+    - .xltm
+    - .pptx
+    - .pptm
+    - .potx
+    - .potm
+    - .txt
+    - .asc
+    - .log
+    - .ini
+    - .text
+    - .md
+    - .markdown
+    - .mdx
+    - .yaml
+    - .yml
+    - .xml
+    - .json
+    - .jsonl
+    - .csv
+    - .tsv
+    - .html
+    - .htm
+    - .css
+    - .js
+    - .ts
+    - .jsx
+    - .tsx
+    - .py
+    - .java
+    - .c
+    - .cc
+    - .cpp
+    - .cxx
+    - .h
+    - .hh
+    - .hpp
+    - .cs
+    - .go
+    - .rb
+    - .sh
+    - .sql
+    - .dart
+    - .scala
+    - .pl
+    - .php
+    - .swift
+    - .rs
+    - .kt
+    - .lua
+    - .hs
 mime_type_map:
   # Document Formats (Intelligent Document Parsing)
   .pdf: application/pdf
@@ -54,11 +115,11 @@ mime_type_map:
   .md: text/markdown
   .markdown: text/markdown
   .mdx: text/markdown
-  .yaml: text/plain
-  .yml: text/plain
+  .yaml: text/yaml
+  .yml: text/yaml
   .xml: text/xml
-  .json: application/json
-  .jsonl: application/jsonl
+  .json: text/plain
+  .jsonl: text/plain
   .csv: text/csv
   .tsv: text/tab-separated-values
   
@@ -67,28 +128,31 @@ mime_type_map:
   .htm: text/html
   .css: text/css
   .js: text/javascript
-  .ts: text/typescript
+  .ts: text/plain
   .jsx: text/jsx
   .tsx: text/tsx
   
-  # Programming/Source Code Files (Commonly Supported)
+  # Programming/Source Code Files (using Gemini File Search API supported types)
   .py: text/x-python
   .java: text/x-java-source
   .c: text/x-c
   .cc: text/x-c
-  .cpp: text/x-c++
-  .cxx: text/x-c++
-  .h: text/x-c-header
-  .hh: text/x-c-header
-  .hpp: text/x-c++-header
+  .cpp: text/x-c++src
+  .cxx: text/x-c++src
+  .h: text/x-chdr
+  .hh: text/x-chdr
+  .hpp: text/x-c++hdr
   .cs: text/x-csharp
   .go: text/x-go
-  .rb: text/x-ruby
-  .sh: application/x-sh
-  .sql: application/sql
-  .dart: text/x-dart
+  .rb: text/x-ruby-script
+  .sh: text/plain
+  .sql: text/x-sql
+  .dart: text/plain
   .scala: text/x-scala
   .pl: text/x-perl
-  .php: application/x-php
-  .swift: text/swift
-  .rs: text/rust
+  .php: text/php
+  .swift: text/x-swift
+  .rs: text/x-rust
+  .kt: text/x-kotlin
+  .lua: text/x-lua
+  .hs: text/x-haskell
