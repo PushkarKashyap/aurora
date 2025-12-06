@@ -305,7 +305,7 @@ def chat_fn(message, history, chat_session, conversation_id_state, client, repo_
         )
 
     try:
-        yield "🧠 Thinking...", chat_session, conversation_id_state, new_conversation_started 
+
         
         response = send_message_with_retry(chat_session, message)
         

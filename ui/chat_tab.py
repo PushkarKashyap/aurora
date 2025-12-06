@@ -132,6 +132,8 @@ def chat_wrapper(message, history, assess_criticality, chat_session, conversatio
             elif response_text.startswith("🧠"):
                 # Processing - update last message
                 history[-1].content = response_text
+            elif response_text.startswith("⚠️"): # Handle warning/error messages
+                history[-1].content = response_text
         else:
             # Final response - replace placeholder with actual content
             history[-1] = ChatMessage(role="assistant", content=response_text)
@@ -194,9 +196,8 @@ def create_chat_ui(client, _, prompts, config): # store passed is ignored
                     ]
                 )
                 with gr.Row():
-                    chat_input = gr.Textbox(show_label=False, placeholder="Enter your message...", scale=4, container=False)
-                    assess_criticality_checkbox = gr.Checkbox(label="Assess Criticality", value=False, scale=1)
-                    send_button = gr.Button("Send", variant="primary", scale=1)
+                    chat_input_multimodal = gr.MultimodalTextbox(show_label=False, placeholder="Enter your message...", scale=10, interactive=True, max_plain_text_length=5000, file_types=None)
+                    assess_criticality_checkbox = gr.Checkbox(label="Assess Criticality", value=False, scale=2, elem_id="assess-criticality-checkbox")
         
         with gr.Tab("Visualization"):
             visualization_output = gr.Markdown("No visualization generated yet. Ask a question and then click 'Visualize Impact'.", elem_id="visualization-output")
@@ -219,12 +220,23 @@ def create_chat_ui(client, _, prompts, config): # store passed is ignored
         )
 
         def chat_wrapper_fn(msg, hist, crit, sess, conv_id, repo):
-             yield from chat_wrapper(msg, hist, crit, sess, conv_id, repo, client, prompts, config, refresh_fn)
+             user_message_text = msg['text'] # Extract the text content from the multimodal input
+             yield from chat_wrapper(user_message_text, hist, crit, sess, conv_id, repo, client, prompts, config, refresh_fn)
         
-        send_button.click(fn=chat_wrapper_fn, inputs=[chat_input, chatbot, assess_criticality_checkbox, chat_session_state, conversation_id_state, repo_dropdown], outputs=[chatbot, chat_input, chat_session_state, conversation_id_state, conversation_list])
-        chat_input.submit(fn=chat_wrapper_fn, inputs=[chat_input, chatbot, assess_criticality_checkbox, chat_session_state, conversation_id_state, repo_dropdown], outputs=[chatbot, chat_input, chat_session_state, conversation_id_state, conversation_list])
+        chat_input_multimodal.submit(
+            fn=chat_wrapper_fn,
+            inputs=[
+                chat_input_multimodal,
+                chatbot,
+                assess_criticality_checkbox,
+                chat_session_state,
+                conversation_id_state,
+                repo_dropdown
+            ],
+            outputs=[chatbot, chat_input_multimodal, chat_session_state, conversation_id_state, conversation_list]
+        )
 
-        chatbot.example_select(fn=populate_example, inputs=None, outputs=[chat_input])
+        chatbot.example_select(fn=populate_example, inputs=None, outputs=[chat_input_multimodal])
 
         refresh_convos_button.click(fn=refresh_fn, inputs=[repo_dropdown], outputs=[conversation_list] + conversation_controls)
 

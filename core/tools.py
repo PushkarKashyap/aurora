@@ -1,6 +1,7 @@
 import os
 import json
 import ast
+import yaml # Added import
 
 # Tool Definitions for Gemini
 from google.genai import types
@@ -64,17 +65,24 @@ def add_repository(path):
 
 def list_files(directory_path=None):
     """
-    Lists all files in the given directory. 
+    Lists all files in the given directory, respecting ignored directories from config.yaml.
     If directory_path is not provided, uses the current active workspace.
     """
     target_dir = directory_path if directory_path else _WORKSPACE_PATH
     try:
         files_list = []
-        ignored_dirs = {'.git', '.env', '__pycache__', 'node_modules', 'venv', 'env', 'dist', 'build', 'target', 'bin', 'obj'}
+        
+        # Load ignored directories from config.yaml
+        config_path = os.path.join(os.getcwd(), "config.yaml") # Assuming config.yaml is in the project root
+        all_ignored_dirs = set() # Initialize an empty set
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                config_data = yaml.safe_load(f)
+            all_ignored_dirs = set(config_data.get("ingestion", {}).get("ignored_directories", []))
         
         for root, dirs, files in os.walk(target_dir):
-            # Skip irrelevant directories to save tokens
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ignored_dirs]
+            # Skip irrelevant directories (including those starting with '.')
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in all_ignored_dirs]
             
             for file in files:
                 if not file.startswith('.'):

@@ -26,7 +26,9 @@ def create_ingest_ui(client, store, config):
 
                 with gr.Accordion("Supported File Extensions", open=False):
                     allowed_extensions = config.get("ingestion", {}).get("allowed_extensions", [])
-                    gr.Markdown(f"```\n{' '.join(allowed_extensions)}\n```")
+                    badge_style = "display: inline-block; padding: 3px 10px; border-radius: 15px; background-color: #444444; color: #EEEEEE; font-size: 0.8em; margin: 3px;"
+                    badges_html = "".join([f'<span style="{badge_style}">{ext}</span>' for ext in allowed_extensions])
+                    gr.HTML(f'<div style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: center;">{badges_html}</div>')
 
                 with gr.Row():
                     ingest_button = gr.Button("🚀 Ingest Files", variant="primary")

@@ -26,6 +26,32 @@ ingestion:
     - .idea
     - .vscode
     - .gradio
+    - .env
+    - env
+    - dist
+    - build
+    - target
+    - bin
+    - obj
+    - out
+    - tmp
+    - temp
+    - logs
+    - .terraform
+    - .serverless
+    - coverage
+    - .pytest_cache
+    - .mypy_cache
+    - .eggs
+    - elm-stuff
+    - bower_components
+    - jspm_packages
+    - typings
+    - report
+    - .bundle
+    - vendor
+    - .gradle
+    - pkg
   ignored_files:
     - LICENSE
     - aurora_history.db

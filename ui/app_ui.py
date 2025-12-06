@@ -21,6 +21,9 @@ def create_ui(client, prompts, config):
         min-height: 600px;
         overflow: auto;
     }
+    .svelte-14vb072 {
+        margin-top: 2px;
+    }
     """
     
     with gr.Blocks(theme=gr.themes.Ocean(), css=css) as demo:
