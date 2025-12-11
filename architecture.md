@@ -27,15 +27,16 @@ graph TD
     subgraph "External & Data Stores"
         direction LR
         J[Google Gemini API]
-        K[Google AI File Search Stores - One per repository]
-        L[Knowledge Graphs - data/graphs/]
-        M[SQLite DB - aurora_history.db]
+        K[Google AI File Search Stores]
+        L[Knowledge Graphs]
+        M[SQLite DB]
     end
 
     %% UI to Backend Interactions
     B -- "1. User selects/adds repo" --> F
     C -- "2. User selects repo" --> F
-    F -- "Provides repo list" --> B & C
+    F -- "Provides repo list" --> B
+    F -- "Provides repo list" --> C
     D -- "Manages" --> F
 
     B -- "3. Ingest(repo_path)" --> G

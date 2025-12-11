@@ -24,26 +24,42 @@ A conversational AI assistant that transforms codebase analysis.
 
 ---
 
-## Key Features
+## ✨ Key Features
 
-- **Conversational Code Analysis:** Ingest any codebase and start a conversation to understand its structure and dependencies.
-- **Knowledge Graph Generation:** Automatically builds a structural map of your Python code to understand relationships between components.
-- **Refactored Architecture:** Clean separation of concerns with `core/` (logic) and `ui/` (interface) packages.
-- **Real-time Status Updates:** Provides immediate feedback on agent activities (tool execution, thinking) via streaming updates.
+- **Refactored Architecture:** Scalable design with separate `core/` (logic) and `ui/` (interface) packages.
 - **Dynamic Repository Management:** Support for multiple repositories with isolated knowledge graphs and vector stores.
+- **Real-time Status Updates:** Provides immediate feedback on agent activities (tool execution, thinking) via streaming updates.
 - **Advanced Impact Analysis:**
-    - **Criticality Assessment:** Prioritizes impacted components (High, Medium, Low).
-    - **Dynamic Dependency Visualization:** Generates Mermaid.js graphs on-the-fly to visualize impact.
-- **Exportable Reports:** Download your analysis as a structured Markdown file for documentation and sharing.
+  - **Criticality Assessment:** Request a prioritized analysis of impacted components, classified as High, Medium, or Low, with justifications for each.
+  - **Dynamic Dependency Visualization:** Generate on-the-fly dependency graphs using Mermaid.js based on your conversation to visually understand component relationships.
+- **Exportable Reports:** Download your entire impact analysis conversation as a structured Markdown report for documentation or sharing.
+- **Interactive UI:**
+  - A clean, themeable interface powered by Gradio.
+  - Collapsible sidebar to maximize chat space.
+  - Separate tabs for file ingestion, chat, and visualization.
 
 ---
 
-## How It Works: A Simple Workflow
+## How It Works: A Detailed Workflow
 
-1.  **Select or Add Repository:** The user chooses a repository from a dropdown in the UI. The list is managed by `repositories.json`.
-2.  **Ingest Codebase:** For the selected repository, the system creates or loads its dedicated Vector Store and Knowledge Graph. Logic is handled by `core/ingest.py` and `core/store_utils.py`.
-3.  **Chat & Analyze:** The user interacts with the AI. The chat engine (`core/chat_engine.py`) is scoped to the selected repository, ensuring all analysis, RAG, and history are contextually correct.
-4.  **Visualize & Report:** The system generates dependency graphs and reports based on the analysis of the selected repository.
+1.  **Repository Selection (ui/ingest_tab.py & ui/chat_tab.py):**
+    - The user selects a pre-existing repository from a dropdown or adds a new one by providing a name and local path.
+    - This information is stored in `repositories.json` and managed by helper functions in `core/tools.py`.
+
+2.  **Ingestion & Analysis (core/ingest.py):**
+    - When the user clicks "Ingest Files," the system scans all relevant files in the repository's path.
+    - It creates an isolated **Google AI File Search Store** for vector embeddings (managed by `core/store_utils.py`).
+    - It also builds a **Knowledge Graph** by parsing Python files with the AST module, storing the result in `data/graphs/`.
+
+3.  **Conversational Interaction (core/chat_engine.py):**
+    - The user asks questions in the chat interface (`ui/chat_tab.py`).
+    - The chat engine is initialized with the selected repository's path.
+    - It uses the corresponding Vector Store for Retrieval-Augmented Generation (RAG) and the Knowledge Graph for structural analysis.
+    - Chat history is saved to a central SQLite database (`aurora_history.db`) but filtered by repository for the user.
+
+4.  **Visualization & Reporting (ui/app_ui.py):**
+    - After an analysis, the user can click "Visualize Impact" to generate a Mermaid.js graph, which is displayed in the "Visualization" tab.
+    - The entire conversation and analysis can be exported as a clean Markdown report.
 
 ---
 
@@ -54,6 +70,32 @@ A conversational AI assistant that transforms codebase analysis.
 - **Frontend:** Gradio (`ui/`)
 - **Database:** SQLite (Chat History) & Google AI File Search (Vector Embeddings)
 - **Code Analysis:** Python AST (Abstract Syntax Tree)
+
+---
+
+## 📂 Project Structure
+
+```
+aurora/
+├── core/                   # <-- Backend Business Logic
+│   ├── chat_engine.py      # <-- Chat logic, RAG, and DB ops
+│   ├── ingest.py           # <-- Ingestion and knowledge graph logic
+│   ├── tools.py            # <-- Agent tools (file access, repo management)
+│   └── store_utils.py      # <-- Vector store management (one per repo)
+├── ui/                     # <-- Frontend UI Components
+│   ├── app_ui.py           # <-- Main UI composition
+│   ├── chat_tab.py         # <-- Chat tab implementation
+│   └── ingest_tab.py       # <-- Ingest tab implementation
+├── data/
+│   └── graphs/             # <-- Stores generated knowledge graphs
+├── app.py                  # <-- Main application entrypoint
+├── config.yaml             # <-- Application-wide configuration
+├── repositories.json       # <-- Stores paths to user-added codebases
+├── .env                    # <-- Local environment configuration (API keys)
+├── prompts.yaml            # <-- All LLM prompts
+├── requirements.txt
+├── README.md
+```
 
 ---
 
