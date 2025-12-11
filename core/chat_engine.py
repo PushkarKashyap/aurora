@@ -55,7 +55,8 @@ def init_db(db_name):
                     timestamp DATETIME NOT NULL,
                     query TEXT NOT NULL,
                     response TEXT NOT NULL,
-                    repo_path TEXT
+                    repo_path TEXT,
+                    tool_calls TEXT
                 )
             """)
             # Migration check
@@ -65,19 +66,24 @@ def init_db(db_name):
                 print("Migrating database: adding 'repo_path' column.")
                 cursor.execute("ALTER TABLE chat_history ADD COLUMN repo_path TEXT")
 
+            if "tool_calls" not in columns:
+                print("Migrating database: adding 'tool_calls' column.")
+                cursor.execute("ALTER TABLE chat_history ADD COLUMN tool_calls TEXT")
+
             conn.commit()
         print("Database initialized successfully.")
     except sqlite3.Error as e:
         print(f"Error initializing database: {e}")
 
-def add_chat_history(db_name, conversation_id, query, response, repo_path=None):
+def add_chat_history(db_name, conversation_id, query, response, repo_path=None, tool_calls=None):
     """Adds a new chat interaction to the history database."""
     try:
         with sqlite3.connect(db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
             cursor = conn.cursor()
+            tool_calls_json = json.dumps(tool_calls) if tool_calls is not None else None
             cursor.execute(
-                "INSERT INTO chat_history (conversation_id, timestamp, query, response, repo_path) VALUES (?, ?, ?, ?, ?)",
-                (conversation_id, datetime.now(), query, response, repo_path)
+                "INSERT INTO chat_history (conversation_id, timestamp, query, response, repo_path, tool_calls) VALUES (?, ?, ?, ?, ?, ?)",
+                (conversation_id, datetime.now(), query, response, repo_path, tool_calls_json)
             )
             conn.commit()
     except sqlite3.Error as e:
@@ -131,7 +137,7 @@ def load_conversation_from_db(db_name, conversation_id):
         with sqlite3.connect(db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT query, response FROM chat_history WHERE conversation_id = ? ORDER BY timestamp ASC",
+                "SELECT query, response, tool_calls FROM chat_history WHERE conversation_id = ? ORDER BY timestamp ASC",
                 (conversation_id,)
             )
             return cursor.fetchall()
@@ -183,7 +189,9 @@ def generate_visualization(conversation_id, db_name, config, repo_path, show_nei
     if not history:
         return "```mermaid\ngraph TD;\n  A[Could not load conversation history.];\n```"
 
-    all_text = "".join([q + r for q, r in history])
+    # History rows can include (query, response) or (query, response, tool_calls).
+    # Safely concatenate the query and response fields without assuming tuple length.
+    all_text = "".join([str(item[0] or "") + str(item[1] or "") for item in history])
     all_node_ids = set(node_map.keys())
     mentioned_nodes = {node_id for node_id in all_node_ids if node_id in all_text}
 
@@ -255,165 +263,419 @@ def generate_visualization(conversation_id, db_name, config, repo_path, show_nei
     return "```mermaid\n" + "\n".join(mermaid_lines) + "\n```"
 
 def chat_fn(message, history, chat_session, conversation_id_state, client, repo_path, prompts, config):
+
     """
+
     Handles the chat interaction, using the file search store and local tools.
+
     """
+
     db_name = config["database_name"]
+
     new_conversation_started = False
 
+
+
     try:
+
         store = get_or_create_store(client, repo_path)
+
     except Exception as e:
+
         yield f"Error connecting to store: {e}", chat_session, conversation_id_state, new_conversation_started
+
         return
+
+
 
     if not conversation_id_state:
+
         new_conversation_started = True
+
         conversation_id_state = f"conv_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
         print(f"New conversation started with ID: {conversation_id_state}")
 
+
+
     if not chat_session:
+
         chat_session = None
+
         gemini_history = []
+
         if history:
+
             for msg in history:
+
                 if isinstance(msg, dict):
-                    role = 'model' if msg['role'] == 'assistant' else msg['role']
-                    content = msg['content']
+
+                    role = 'model' if msg.get('role') == 'assistant' else msg.get('role')
+
+                    content = msg.get('content')
+
+                    metadata = msg.get('metadata')
+
                 else: 
-                    role = 'model' if msg.role == 'assistant' else msg.role
-                    content = msg.content
-                gemini_history.append(types.Content(role=role, parts=[types.Part(text=content)]))
+
+                    role = 'model' if getattr(msg, 'role', '') == 'assistant' else getattr(msg, 'role', '')
+
+                    content = getattr(msg, 'content', '')
+
+                    metadata = getattr(msg, 'metadata', None)
+
+
+
+                if not role: continue
+
+                
+
+                # User message
+
+                if role == 'user':
+
+                    gemini_history.append(types.Content(role=role, parts=[types.Part(text=content)]))
+
+                    continue
+
+
+
+                # Assistant message
+
+                tool_calls = []
+
+                if metadata and "tool_calls" in metadata:
+
+                    tool_calls = metadata["tool_calls"]
+
+                
+
+                if tool_calls:
+
+                    function_calls_parts = []
+
+                    tool_outputs_parts = []
+
+                    for tc in tool_calls:
+
+                        args = tc.get('args', {})
+
+                        if isinstance(args, str):
+
+                            try:
+
+                                args = json.loads(args)
+
+                            except json.JSONDecodeError:
+
+                                args = {}
+
+                        
+
+                        function_calls_parts.append(
+
+                            types.Part(function_call=types.FunctionCall(name=tc['name'], args=args))
+
+                        )
+
+                        tool_outputs_parts.append(
+
+                            types.Part(function_response=types.FunctionResponse(name=tc['name'], response={"result": tc['result']}))
+
+                        )
+
+                    
+
+                    if function_calls_parts:
+
+                        gemini_history.append(types.Content(role='model', parts=function_calls_parts))
+
+                    if tool_outputs_parts:
+
+                        gemini_history.append(types.Content(role='user', parts=tool_outputs_parts)) # Use 'user' role for function responses
+
+
+
+                if content:
+
+                    # Check if the content is just a repeat of the tool call display
+
+                    is_redundant = False
+
+                    if tool_calls:
+
+                        first_tool_line = f"✅ `{tool_calls[0].get('name', 'tool')}`"
+
+                        if content.strip().startswith(first_tool_line):
+
+                            is_redundant = True
+
+
+
+                    if not is_redundant:
+
+                         gemini_history.append(types.Content(role='model', parts=[types.Part(text=content)]))
+
+        
 
         tool_config = types.GenerateContentConfig(
+
             tools=[
+
                 types.Tool(
+
                     file_search=types.FileSearch(
+
                         file_search_store_names=[store.name]
+
                     ),
+
                     function_declarations=get_tool_definitions()
+
                 )
+
             ],
+
             system_instruction=prompts.get("chat_prompt"),
+
             automatic_function_calling={"disable": True} 
+
         )
+
         
+
         chat_session = client.chats.create(  # type: ignore
+
             history=gemini_history,
+
             model=config["gemini_model"]["chat_model_name"],
+
             config=tool_config
+
         )
+
+
 
     try:
 
+        executed_tool_calls = []
+
         
+
         response = send_message_with_retry(chat_session, message)
+
         
+
         while True:
+
             function_calls = []
+
             if response.candidates and response.candidates[0].content.parts:
+
                 for part in response.candidates[0].content.parts:
+
                     if part.function_call:
+
                         function_calls.append(part.function_call)
+
             
+
             if not function_calls:
+
                 break 
+
             
+
             tool_outputs = []
+
             for fc in function_calls:
+
                 func_name = fc.name
-                func_args = fc.args
+
+                func_args = dict(fc.args) # Convert to dict for serialization
+
                 
+
                 # Build descriptive status with tool arguments
+
                 if func_name == "read_file":
+
                     arg_desc = f"`{func_args.get('file_path', '?')}`"
+
                 elif func_name == "search_knowledge_graph":
+
                     arg_desc = f"query: `{func_args.get('query', '?')}`"
+
                 elif func_name == "list_files":
+
                     arg_desc = f"`{func_args.get('directory_path', 'workspace')}`"
+
                 else:
+
                     arg_desc = ""
+
                 
+
                 status_detail = f" → {arg_desc}" if arg_desc else ""
+
                 yield f"🛠️ `{func_name}`{status_detail}...", chat_session, conversation_id_state, new_conversation_started
+
                 
+
                 if func_name in available_tools:
+
                     try:
-                        # Automatically inject repo_path for tools that need it
+
                         if func_name == "search_knowledge_graph":
+
                             func_args["repo_path"] = repo_path
+
                         if func_name == "list_files" and not func_args.get("directory_path"):
+
                             func_args["directory_path"] = repo_path
+
                         if func_name == "set_workspace_path" and not func_args.get("path"):
+
                             func_args["path"] = repo_path
+
                             
+
                         result = available_tools[func_name](**func_args)
+
                         print(f"Executed {func_name} -> Length: {len(str(result))}")
+
                         yield f"✅ `{func_name}`{status_detail} ✓", chat_session, conversation_id_state, new_conversation_started
+
                     except Exception as e:
+
                         result = f"Error executing {func_name}: {e}"
+
                         yield f"❌ Error in `{func_name}`: {e}", chat_session, conversation_id_state, new_conversation_started
+
                 else:
+
                     result = f"Error: Function {func_name} is not available."
+
                 
+
+                executed_tool_calls.append({
+
+                    "name": func_name,
+
+                    "args": func_args,
+
+                    "result": str(result)
+
+                })
+
+
+
                 tool_outputs.append(
+
                     types.Part(
+
                         function_response=types.FunctionResponse(
+
                             name=func_name,
+
                             response={"result": result}
+
                         )
+
                     )
+
                 )
+
+
 
             yield "🧠 Processing tool outputs...", chat_session, conversation_id_state, new_conversation_started
+
             response = send_message_with_retry(chat_session, tool_outputs)
 
-        # Safely extract text from response, handling "thought" parts that might trigger warnings
+
+
         response_text = ""
-        print(f"[DEBUG] Response candidates count: {len(response.candidates) if response.candidates else 0}")
+
         if response.candidates and response.candidates[0].content.parts:
-            print(f"[DEBUG] Response parts count: {len(response.candidates[0].content.parts)}")
-            for i, part in enumerate(response.candidates[0].content.parts):
-                print(f"[DEBUG] Part {i}: text={bool(part.text)}, func_call={bool(part.function_call)}")
+
+            for part in response.candidates[0].content.parts:
+
                 if part.text:
+
                     response_text += part.text
 
+
+
     except Exception as e:
+
         print(f"Error during chat session: {e}")
+
+        error_message = f"I'm sorry, but I encountered an error: {e}. Please try again."
+
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+
              error_message = (
+
                 "⚠️ **High Traffic / Quota Exceeded**\n\n"
+
                 "The AI model is currently busy or the context is too large (429 Resource Exhausted).\n"
+
                 "Please wait about a minute and try again. If the problem persists, try clearing the chat history."
+
             )
-        else:
-            error_message = (
-                f"I'm sorry, but I encountered an error: {e}. "
-                "Please try again."
-            )
+
         yield error_message, chat_session, conversation_id_state, new_conversation_started
+
         return
 
+
+
     try:
+
         if response.candidates:
+
             grounding = response.candidates[0].grounding_metadata
+
             if grounding and grounding.grounding_chunks:
+
                 sources = {chunk.retrieved_context.title for chunk in grounding.grounding_chunks}
+
                 if sources:
-                    # Yield RAG indicator
+
                     yield f"📚 `file_search` → found {len(sources)} source{'s' if len(sources) > 1 else ''}", chat_session, conversation_id_state, new_conversation_started
+
                     citations = "\n\n**Sources:**\n" + "\n".join(f"- `{source}`" for source in sorted(list(sources)))
-                    if response_text:
-                        response_text += citations
-                    else:
-                        response_text = citations
+
+                    response_text += citations
+
     except (AttributeError, IndexError):
+
         pass
 
-    if message and response_text and conversation_id_state:
-        add_chat_history(db_name, conversation_id_state, message, response_text, repo_path) 
 
-    print(f"[DEBUG] Final response_text length: {len(response_text) if response_text else 0}")
+
+    if message and (response_text or executed_tool_calls) and conversation_id_state:
+
+        add_chat_history(
+
+            db_name,
+
+            conversation_id_state,
+
+            message,
+
+            response_text,
+
+            repo_path=repo_path,
+
+            tool_calls=executed_tool_calls
+
+        )
+
+
+
     if not response_text:
+
         response_text = "(No response text generated by the model.)"
+
     yield response_text, chat_session, conversation_id_state, new_conversation_started

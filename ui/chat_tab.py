@@ -1,5 +1,6 @@
 import gradio as gr
 from gradio.components import ChatMessage
+import json
 from core.chat_engine import (
     chat_fn, load_conversation_from_db, delete_conversation_from_db, 
     generate_report, generate_visualization, get_conversations,
@@ -48,8 +49,41 @@ def load_conversation(conversation_id, db_name):
         return [], None, None, gr.update(value=conversation_id), *_get_conversation_controls_updates(True)
 
     chat_history_formatted = []
-    for query, response in history:
-        chat_history_formatted.extend([ChatMessage(role="user", content=query), ChatMessage(role="assistant", content=response)])
+    for query, response, tool_calls_json in history:
+        chat_history_formatted.append(ChatMessage(role="user", content=query))
+        
+        tool_calls = []
+        if tool_calls_json:
+            try:
+                tool_calls = json.loads(tool_calls_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        display_content = response if response else ""
+        
+        # Add tool calls to metadata. The UI won't show it unless we tell it to.
+        metadata = {"tool_calls": tool_calls} if tool_calls else None
+
+        # Re-create the visual tool call history as seen during live generation
+        full_response_content = ""
+        if tool_calls:
+            for tool_call in tool_calls:
+                func_name = tool_call.get("name", "tool")
+                args = tool_call.get('args', {})
+                arg_desc = ""
+                if func_name == "read_file":
+                    arg_desc = f"`{args.get('file_path', '?')}`"
+                elif func_name == "search_knowledge_graph":
+                    arg_desc = f"query: `{args.get('query', '?')}`"
+                elif func_name == "list_files":
+                    arg_desc = f"`{args.get('directory_path', 'workspace')}`"
+                
+                status_detail = f" → {arg_desc}" if arg_desc else ""
+                full_response_content += f"✅ `{func_name}`{status_detail} ✓\n"
+        
+        full_response_content += display_content
+
+        chat_history_formatted.append(ChatMessage(role="assistant", content=full_response_content, metadata=metadata))
 
     return chat_history_formatted, None, conversation_id, gr.update(value=conversation_id), *_get_conversation_controls_updates(True)
 
@@ -143,7 +177,6 @@ def chat_wrapper(message, history, assess_criticality, chat_session, conversatio
     
     conversation_list_update = refresh_conversation_list_fn(repo_path) if new_convo_started else gr.update()
     yield history, "", new_chat_session, new_conversation_id, conversation_list_update
-
 
 
 
