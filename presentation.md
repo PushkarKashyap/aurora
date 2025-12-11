@@ -121,7 +121,7 @@ graph TD
     end
 
     subgraph "Backend Core"
-        B[Chat & Ingest Logic <br> (core/)]
+        B[Chat & Ingest Logic <br> core/]
     end
 
     subgraph "Data Stores (Per-Repository)"
@@ -129,7 +129,7 @@ graph TD
         D[Knowledge Graph]
     end
 
-    E[Shared Chat History <br> (SQLite)]
+    E[Shared Chat History <br> SQLite]
 
     A -- "User selects repository" --> B
     B -- "Operates on" --> C & D
