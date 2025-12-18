@@ -159,10 +159,22 @@ def generate_report(conversation_id, db_name):
     report_content += f"**Generated on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     report_content += "---\n\n"
 
-    for i, (query, response) in enumerate(history):
+    for i, (query, response, tool_calls_json) in enumerate(history):
         report_content += f"### Interaction {i+1}\n\n"
-        report_content += f"**User Query:**\n```\n{query}\n```\n\n"
-        report_content += f"**Aurora's Response:**\n{response}\n\n"
+        report_content += f"**User Query:**\n```\n{query or ''}\n```\n\n"
+        
+        # Add tool info if present
+        if tool_calls_json:
+            try:
+                tool_calls = json.loads(tool_calls_json)
+                if tool_calls:
+                    report_content += "**Tools used:** "
+                    tool_names = [f"`{tc.get('name', 'tool')}`" for tc in tool_calls]
+                    report_content += ", ".join(tool_names) + "\n\n"
+            except:
+                pass
+
+        report_content += f"**Aurora's Response:**\n{response or ''}\n\n"
         report_content += "---\n\n"
 
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.md', encoding='utf-8') as temp_file:
